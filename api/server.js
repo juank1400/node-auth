@@ -1,6 +1,9 @@
 const Prometheus = require('prom-client')
 const express = require('express');
 const http = require('http');
+const bodyParser = require('body-parser');
+const jwt = require("jsonwebtoken");
+const { config } = require("./config");
 
 Prometheus.collectDefaultMetrics();
 
@@ -26,6 +29,7 @@ const requestTimer = (req, res, next) => {
 }
 
 const app = express();
+
 const server = http.createServer(app)
 
 // See: http://expressjs.com/en/4x/api.html#app.settings.table
@@ -43,6 +47,27 @@ app.get('/metrics', (req, res, next) => {
 // Time routes after here.
 app.use(requestTimer);
 
+// Body Parser
+app.use(bodyParser.json());
+
+app.post("/api/auth/token", (req, res) => {
+    const { email, username, name } = req.body;
+    // console.log(req);
+    const token = jwt.sign( {sub: username, email, name }, config.authJwtSecret );
+    res.json({ access_token: token});
+});
+
+app.get("/api/auth/verify", function(req, res, next) {
+  const { access_token } = req.query;
+  try {
+    const decoded = jwt.verify(access_token,config.authJwtSecret);
+    res.json({ message: "The access token is valid. ", username: decoded.sub })
+  }catch(err){
+    next(err);
+  }
+
+})
+
 // Log routes after here.
 const pino = require('pino')({
   level: PRODUCTION ? 'info' : 'debug',
@@ -56,6 +81,7 @@ app.get('/', (req, res) => {
 });	
 
 app.get('*', (req, res) => {
+  console.log("URL don't found.");
   res.status(404).send("Not Found");
 });
 
